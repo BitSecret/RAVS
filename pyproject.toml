@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "RAVS"
+version = "1.0"
+authors = [
+    { name = "Xiaokai Zhang", email = "xiaokaizhang@shu.edu.cn" },
+]
+description = "Agentic Geometry Problem Solving via Human-like Parallel Bidirectional Reasoning"
+readme = "README.md"
+requires-python = "==3.12.12"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "openai==2.21.0",
+    "dotenv==0.9.9",
+    "matplotlib==3.10.8",
+    "numpy==2.3.5",
+    "sympy==1.14.0",
+    "func-timeout==4.3.5"
+]
+[project.urls]
+"Homepage" = "https://github.com/BitSecret/RAVS"
+"Bug Tracker" = "https://github.com/BitSecret/RAVS/issues"
