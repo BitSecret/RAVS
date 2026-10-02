@@ -1,4 +1,4 @@
-from problem import SymbolicSolver
+from symbolic_solver import SymbolicSolver
 from utils import parse_gdl, parse_cdl, load_json, save_json, get_theorems, make_train_val_test_split
 from multiprocessing import Process, Queue
 from openai import OpenAI
@@ -98,7 +98,7 @@ class Agent:
         )
 
 
-def get_system_prompt(gdl):
+def get_system_prompt(gdl, bidirectional):
     relation_prompt = []
     for relation in gdl['Relations']:
         relation_prompt.append(
@@ -120,7 +120,11 @@ def get_system_prompt(gdl):
             theorem + ':' + gdl['Theorems'][theorem]['premises'] + '->' + gdl['Theorems'][theorem]['conclusion']
         )
 
-    with open('../../datasets/system_prompt.txt', 'r', encoding='utf-8') as f:
+    path_system_prompt = '../../datasets/system_prompt.txt'
+    if not bidirectional:
+        path_system_prompt = '../../datasets/system_prompt_no_bidirectional.txt'
+
+    with open(path_system_prompt, 'r', encoding='utf-8') as f:
         system_prompt = f.read()
         system_prompt = system_prompt.replace('{relation}', '\n'.join(relation_prompt))
         system_prompt = system_prompt.replace('{attribution}', '\n'.join(attribution_prompt))
@@ -145,7 +149,7 @@ def parse_response(response):
     return tool_name, args
 
 
-def solve(api_key, base_url, model_name, max_epoch, max_context, problem_id, debug_mode):
+def solve(api_key, base_url, model_name, max_epoch, max_context, problem_id, bidirectional, reflection, debug_mode):
     if debug_mode:
         global debug
         debug = True
@@ -160,7 +164,7 @@ def solve(api_key, base_url, model_name, max_epoch, max_context, problem_id, deb
         cdl = load_json(f'../../datasets/problems/{problem_id}.json')
         solver = SymbolicSolver(parse_gdl(gdl), parse_cdl(cdl))
 
-        agent.add_memory(role='system', content=get_system_prompt(gdl))
+        agent.add_memory(role='system', content=get_system_prompt(gdl, bidirectional=bidirectional))
         agent.add_memory(role='user', content=solver.state())
 
         try:
@@ -181,7 +185,7 @@ def solve(api_key, base_url, model_name, max_epoch, max_context, problem_id, deb
                         tool_call = '工具执行结果：\n' + solver.find_goal(args)
                     elif tool_name == 'check':
                         tool_call = '工具执行结果：\n' + solver.check()
-                    elif tool_name == 'summarize':
+                    elif tool_name == 'summarize' and reflection:
                         agent.summarize(solver.state(), args)
                         continue
                     elif tool_name == 'finish':
@@ -197,7 +201,7 @@ def solve(api_key, base_url, model_name, max_epoch, max_context, problem_id, deb
                     agent.add_memory(role='user', content='检测到问题已求解，自动结束。')
                     break
 
-                if agent.context_length > max_context:
+                if reflection and agent.context_length > max_context:
                     agent.add_memory(role='user', content=get_summarize_prompt())
 
         except KeyboardInterrupt:
@@ -223,17 +227,26 @@ def solve(api_key, base_url, model_name, max_epoch, max_context, problem_id, deb
     return result, epoch_count, time.time() - timing
 
 
-def multiprocess_solve(task_queue, reply_queue, api_key, base_url, model_name, max_epoch, max_context, debug_mode):
+def multiprocess_solve(task_queue, reply_queue, api_key, base_url, model_name, max_epoch, max_context,
+                       bidirectional, reflection, debug_mode):
     while not task_queue.empty():
         problem_id = task_queue.get()
         # reply_queue.put((os.getpid(), "start", time.time(), (problem_id, model_name)))
         result, epoch_count, timing = solve(
-            api_key, base_url, model_name, max_epoch, max_context, problem_id, debug_mode
+            api_key, base_url, model_name, max_epoch, max_context, problem_id, bidirectional, reflection, debug_mode
         )
         reply_queue.put((os.getpid(), "end", time.time(), (problem_id, model_name, result, epoch_count, timing)))
 
 
-def main(test_pids, log_path, model_names, max_epoch, max_context, solve_again, debug_mode):
+def main(test_pids=make_train_val_test_split()['test'],
+         log_path="../../outputs/log/log_pssr_agent.json",
+         model_names=tuple(['Deepseek'] * 8),
+         max_epoch=50,
+         max_context=80000,
+         solve_again=True,
+         bidirectional=True,
+         reflection=True,
+         debug_mode=False):
     log = {"total": test_pids, "solved": {}, "unsolved": {}, "timeout": {}, "error": {}}
     if os.path.exists(log_path):
         log = load_json(log_path)
@@ -268,7 +281,7 @@ def main(test_pids, log_path, model_names, max_epoch, max_context, solve_again, 
             target=multiprocess_solve,
             args=(
                 task_queue, reply_queue, os.getenv(f'{model_name}_API_KEY'), os.getenv(f'{model_name}_BASE_URL'),
-                os.getenv(f'{model_name}_MODEL_ID'), max_epoch, max_context, debug_mode
+                os.getenv(f'{model_name}_MODEL_ID'), max_epoch, max_context, bidirectional, reflection, debug_mode
             )
         )
         process.start()
@@ -302,12 +315,7 @@ def main(test_pids, log_path, model_names, max_epoch, max_context, solve_again, 
 
 
 if __name__ == '__main__':
-    main(
-        test_pids=make_train_val_test_split()['test'],
-        log_path="../../outputs/log/log_pssr_agent.json",
-        model_names=['Deepseek'],
-        max_epoch=50,
-        max_context=80000,
-        solve_again=True,
-        debug_mode=True
-    )
+    main()
+    # main(log_path="../../outputs/log/log_pssr_agent_no_bidirectional.json", bidirectional=False)
+    # main(log_path="../../outputs/log/log_pssr_agent_no_reflection.json", reflection=False)
+    # main(log_path="../../outputs/log/log_pssr_agent_no_retry.json", solve_again=False)

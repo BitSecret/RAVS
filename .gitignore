@@ -6,14 +6,11 @@ __pycache__
 
 # packaging
 dist
-src/NSS.egg-info
+src/RAVS.egg-info
 
 # data
 datasets
 outputs
-
-# .py
-src/ravs/dataset.py
 
 # .env
 .env

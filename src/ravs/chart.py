@@ -330,6 +330,8 @@ def draw_figure():
 
 
 def draw_table(level=6, span=2, latex=True, show_complete=False):
+    # -- Table 1 --
+
     filenames = {
         'Backward-DFS': 'log_pssr_formalgeo7k-bw-dfs.json',  # symbolic solver
         'Backward-RS': 'log_pssr_formalgeo7k-bw-rs.json',
@@ -360,7 +362,7 @@ def draw_table(level=6, span=2, latex=True, show_complete=False):
         'Pri-TPG': [89.29, 99.16, 96.28, 87.92, 77.07, 66.13, 30.00],  # neural-symbolic solver (training-free)
         'Ours': 'log_pssr_agent.json'
     }
-    last_methods = ["Forward-RS", "Claude4.5 Sonnet", "NSS", 'Ours']
+    last_methods = ["Forward-RS", "Claude4.5 Sonnet", "NSS"]
 
     problem_level = {}  # map problem_id to level
     level_map = {}  # map t_length to level (start from 0)
@@ -421,7 +423,9 @@ def draw_table(level=6, span=2, latex=True, show_complete=False):
                 if str(pid) in pssr_log["solved"]:
                     solved_level_count[0] += 1
                     solved_level_count[problem_level[pid]] += 1
-
+            # print()
+            # print(total_level_count)
+            # print(solved_level_count)
             for i in range(level + 1):
                 if total_level_count[i] == 0:
                     lines.append('Nan')
@@ -443,11 +447,116 @@ def draw_table(level=6, span=2, latex=True, show_complete=False):
         if method in last_methods:
             print(line)
             outputs.append(line)
+    print()
+    outputs.append('\n')
+
+    # -- Table 2 --
+    results = {'Geometry3K': {'solved': [], 'unsolved': []}, 'GeoQA': {'solved': [], 'unsolved': []}}
+    log = load_json(f'../../outputs/log/{filenames["Ours"]}')
+    for pid in log['total']:
+        if str(pid) in log['solved']:
+            if 'Geometry3k' in load_json(f'../../datasets/problems/{pid}.json')['source']:
+                results['Geometry3K']['solved'].append(pid)
+            else:
+                results['GeoQA']['solved'].append(pid)
+        else:
+            if 'Geometry3k' in load_json(f'../../datasets/problems/{pid}.json')['source']:
+                results['Geometry3K']['unsolved'].append(pid)
+            else:
+                results['GeoQA']['unsolved'].append(pid)
+    Geometry3K = len(results['Geometry3K']['solved']) / (
+            len(results['Geometry3K']['solved']) + len(results['Geometry3K']['unsolved'])) * 100
+    GeometryQA = len(results['GeoQA']['solved']) / (
+            len(results['GeoQA']['solved']) + len(results['GeoQA']['unsolved'])) * 100
+    FormalGeo7K = (len(results['Geometry3K']['solved']) + len(results['GeoQA']['solved'])) / (
+            len(results['Geometry3K']['solved']) + len(results['Geometry3K']['unsolved']) +
+            len(results['GeoQA']['solved']) + len(results['GeoQA']['unsolved'])) * 100
+
+    table_2 = [
+        ['Method', 'Geometry3K', 'GeoQA', 'FormalGeo7K'],
+        ['E-GPS', '90.40', '-', '-'],
+        ['DualGeoSolver', '-', '65.20', '-'],
+        ['FGeo-ISRL', '-', '-', '85.16'],
+        ['HyperGNet', '91.99', '85.64', '88.36'],
+        ['Pri-TPG', '95.16', '85.02', ' 89.29'],
+        ['Ours', str(round(Geometry3K, 2)), str(round(GeometryQA, 2)), str(round(FormalGeo7K, 2))]
+    ]
+    max_len_col = []
+    for j in range(len(table_2[0])):
+        max_len = len(table_2[0][j])
+        for i in range(1, len(table_2)):
+            max_len = max(max_len, len(table_2[i][j]))
+        max_len_col.append(max_len)
+
+    for i in range(len(table_2)):
+        lines = []
+        for j in range(len(table_2[i])):
+            lines.append(table_2[i][j] + ' ' * (max_len_col[j] - len(table_2[i][j])))
+
+        if latex:
+            print(' & '.join(lines))
+            outputs.append(' & '.join(lines))
+        else:
+            print(' | '.join(lines))
+            outputs.append(' | '.join(lines))
+    print()
+    outputs.append('\n')
+
+    # -- Table 3 --
+    log = load_json(f'../../outputs/log/log_statistics_ablation.json')
+    table_3 = [
+        ['Method', 'Total', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6']
+    ]
+    for method in log['ablation']:
+        lines = [method, str(round(sum(log['ablation'][method]) / len(log['total']) * 100, 2))]
+        for i in range(len(log['ablation'][method])):
+            lines.append(str(round(log['ablation'][method][i] / total_level_count[i + 1] * 100, 2))) # use the last total_level_count
+        table_3.append(lines)
+
+    max_len_col = []
+    for j in range(len(table_3[0])):
+        max_len = len(table_3[0][j])
+        for i in range(1, len(table_3)):
+            max_len = max(max_len, len(table_3[i][j]))
+        max_len_col.append(max_len)
+
+    for i in range(len(table_3)):
+        lines = []
+        for j in range(len(table_3[i])):
+            lines.append(table_3[i][j] + ' ' * (max_len_col[j] - len(table_3[i][j])))
+
+        if latex:
+            print(' & '.join(lines))
+            outputs.append(' & '.join(lines))
+        else:
+            print(' | '.join(lines))
+            outputs.append(' | '.join(lines))
 
     with open('../../outputs/tab-main_results.txt', 'w', encoding='utf-8') as f:
         f.write('\n'.join(outputs))
 
 
+def lmm_call_statistic():
+    data = {'solved': [], 'unsolved': []}
+    log = load_json('../../outputs/log/log_pssr_agent.json')
+
+    for filename in os.listdir('../../outputs/agent'):
+        count = 0
+        for history in load_json(f'../../outputs/agent/{filename}')['history']:
+            for msg in history:
+                if msg['role'] == 'assistant':
+                    count += 1
+        pid = filename.split('.')[0].split('_')[-1]
+        if pid in log['solved']:
+            data['solved'].append(count)
+        else:
+            data['unsolved'].append(count)
+
+    print('solved', sum(data['solved']) / len(data['solved']))
+    print('unsolved', sum(data['unsolved']) / len(data['unsolved']))
+
+
 if __name__ == '__main__':
-    draw_figure()
+    # draw_figure()
     draw_table()
+    # lmm_call_statistic()
