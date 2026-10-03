@@ -134,4 +134,4 @@ MIMO_MODEL_ID="mimo-v2.5-pro"
 
 ## Citation
 
-coming soon...
+> Xiaokai Zhang, Ruiqing Xia, Liang Chen, Zhenhai Sun, Yuchang Yang, and Tuo Leng. "Agentic Geometry Problem Solving via Human-like Parallel Bidirectional Reasoning." In The Fortieth Annual Conference on Neural Information Processing Systems, 2026.
